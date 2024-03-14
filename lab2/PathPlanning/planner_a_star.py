@@ -118,6 +118,7 @@ class PlannerAStar(Planner):
             print(f"{np.all(self.map[x_array, y_array] == 0)=}")
             print(f"{line=}")
             print(f"{self.map[x_array, y_array]=}")
+            print(f"{self.map[102, 202]=}")
         return (
             self.parent[current_node] != next_node
             and 0 <= next_node[0] < self.map.shape[0]
