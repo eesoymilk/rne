@@ -70,3 +70,4 @@ if __name__ == "__main__":
     img_ = cv2.flip(img, 0)
     cv2.imshow("Path Planning", img_)
     k = cv2.waitKey(0)
+    cv2.destroyAllWindows()

@@ -161,3 +161,4 @@ cython_debug/
 
 *.zip
 __MACOSX/
+.DS_Store

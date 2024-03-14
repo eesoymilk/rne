@@ -27,7 +27,7 @@ def Bresenham(x0: int, x1: int, y0: int, y1: int) -> list[tuple[int, int]]:
                 x += sx
                 err += dy
             y += sy
-    line.append((x1, y1))
+    # line.append((x1, y1))
     return line
 
 
