@@ -10,7 +10,6 @@ class KinematicModelBasic(KinematicModel):
         self.dt = dt
 
     def step(self, state: State, cstate: ControlState) -> State:
-        # TODO: Basic Kinematic Model (DONE)
         v = cstate.v
         w = cstate.w
         x = state.x + v * np.cos(np.deg2rad(state.yaw)) * self.dt

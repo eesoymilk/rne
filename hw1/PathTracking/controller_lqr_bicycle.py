@@ -1,18 +1,20 @@
 import sys
-import numpy as np 
+import numpy as np
+
 sys.path.append("..")
 import PathTracking.utils as utils
 from PathTracking.controller import Controller
+
 
 class ControllerLQRBicycle(Controller):
     def __init__(self, Q=np.eye(4), R=np.eye(1)):
         self.path = None
         self.Q = Q
-        self.Q[0,0] = 1
-        self.Q[1,1] = 1
-        self.Q[2,2] = 1
-        self.Q[3,3] = 1
-        self.R = R*5000
+        self.Q[0, 0] = 1
+        self.Q[1, 1] = 1
+        self.Q[2, 2] = 1
+        self.Q[3, 3] = 1
+        self.R = R * 5000
         self.pe = 0
         self.pth_e = 0
 
@@ -21,7 +23,9 @@ class ControllerLQRBicycle(Controller):
         self.pe = 0
         self.pth_e = 0
 
-    def _solve_DARE(self, A, B, Q, R, max_iter=150, eps=0.01): # Discrete-time Algebra Riccati Equation (DARE)
+    def _solve_DARE(
+        self, A, B, Q, R, max_iter=150, eps=0.01
+    ):  # Discrete-time Algebra Riccati Equation (DARE)
         P = Q.copy()
         for i in range(max_iter):
             temp = np.linalg.inv(R + B.T @ P @ B)
@@ -37,16 +41,24 @@ class ControllerLQRBicycle(Controller):
         if self.path is None:
             print("No path !!")
             return None, None
-        
-        # Extract State 
-        x, y, yaw, delta, v, l, dt = info["x"], info["y"], info["yaw"], info["delta"], info["v"], info["l"], info["dt"]
+
+        # Extract State
+        x, y, yaw, delta, v, l, dt = (
+            info["x"],
+            info["y"],
+            info["yaw"],
+            info["delta"],
+            info["v"],
+            info["l"],
+            info["dt"],
+        )
         yaw = utils.angle_norm(yaw)
-        
+
         # Search Nesrest Target
-        min_idx, min_dist = utils.search_nearest(self.path, (x,y))
+        min_idx, min_dist = utils.search_nearest(self.path, (x, y))
         target = self.path[min_idx]
         target[2] = utils.angle_norm(target[2])
-        
+
         # TODO: LQR Control for Bicycle Kinematic Model
         next_delta = 0
         return next_delta, target

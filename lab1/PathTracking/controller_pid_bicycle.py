@@ -33,9 +33,7 @@ class ControllerPIDBicycle(Controller):
         min_idx, min_dist = utils.search_nearest(self.path, (x, y))
         target = self.path[min_idx]
 
-        min_idx, min_dist = utils.search_nearest(self.path, (x, y))
-        target = self.path[min_idx]
-        ang = np.arctan2(self.path[min_idx, 1] - y, self.path[min_idx, 0] - x)
+        ang = np.arctan2(target[1] - y, target[0] - x)
         ep = min_dist * np.sin(ang)
         self.acc_ep += dt * ep
         diff_ep = (ep - self.last_ep) / dt
