@@ -100,7 +100,6 @@ class PlannerRRTStar(Planner):
         self.cost[start] = 0
         goal_node = None
         for it in range(20000):
-            # print("\r", it, len(self.ntree), end="")
             samp_node = self._random_node(goal, self.map.shape)
             near_node = self._nearest_node(samp_node)
             new_node, cost = self._steer(near_node, samp_node, extend_len)

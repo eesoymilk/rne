@@ -23,21 +23,19 @@ class PlannerAStar(Planner):
         self.g: dict[tuple[int, int], int] = dict()
         self.goal_node = None
 
-    def planning(
-        self, start=(100, 200), goal=(375, 520), inter=None, img=None
-    ):
+    def planning(self, start=(100, 200), goal=(375, 520), inter=None, img=None):
         if inter is None:
             inter = self.inter
 
         directions = [
-            (-inter, 0),
-            (inter, 0),
             (0, -inter),
             (0, inter),
+            (-inter, 0),
+            (inter, 0),
             (-inter, -inter),
-            (inter, inter),
             (-inter, inter),
             (inter, -inter),
+            (inter, inter),
         ]
 
         start = (int(start[0]), int(start[1]))
@@ -56,7 +54,8 @@ class PlannerAStar(Planner):
                 break
 
             for dx, dy in directions:
-                neighbor = (current[0] + dx, current[1] + dy)
+                neighbor = self._steer(current, (dx, dy), goal)
+                # neighbor = current[0] + dx, current[1] + dy
                 if not self._is_valid_node(current, neighbor):
                     continue
 
@@ -88,6 +87,28 @@ class PlannerAStar(Planner):
         if path[-1] != goal:
             path.append(goal)
         return path
+
+    def _steer(
+        self,
+        current: tuple[int, int],
+        direction: tuple[int, int],
+        goal: tuple[int, int],
+    ) -> tuple[int, int]:
+        goal_vect = np.array(goal) - np.array(current)
+        goal_dist = np.linalg.norm(goal_vect)
+
+        if goal_dist < self.inter:
+            dir_norm = np.array(direction) / np.linalg.norm(direction)
+            angle = np.arccos(
+                np.dot(dir_norm, goal_vect)
+                / (np.linalg.norm(dir_norm) * goal_dist)
+            )
+            if angle < np.pi / 4:
+                # Move towards the goal.
+                return goal
+
+        # Return the new position as a tuple of integers.
+        return current[0] + direction[0], current[1] + direction[1]
 
     def _is_valid_node(
         self,

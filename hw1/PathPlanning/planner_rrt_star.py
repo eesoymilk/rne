@@ -1,18 +1,20 @@
 import cv2
 import numpy as np
 import sys
+
 sys.path.append("..")
 import PathPlanning.utils as utils
 from PathPlanning.planner import Planner
 
+
 class PlannerRRTStar(Planner):
     def __init__(self, m, extend_len=20):
         super().__init__(m)
-        self.extend_len = extend_len 
+        self.extend_len = extend_len
 
     def _random_node(self, goal, shape):
-        r = np.random.choice(2,1,p=[0.5,0.5])
-        if r==1:
+        r = np.random.choice(2, 1, p=[0.5, 0.5])
+        if r == 1:
             return (float(goal[0]), float(goal[1]))
         else:
             rx = float(np.random.randint(int(shape[1])))
@@ -34,7 +36,7 @@ class PlannerRRTStar(Planner):
         n2_ = utils.pos_int(n2)
         line = utils.Bresenham(n1_[0], n2_[0], n1_[1], n2_[1])
         for pts in line:
-            if self.map[int(pts[1]),int(pts[0])]<0.5:
+            if self.map[int(pts[1]), int(pts[0])] < 0.5:
                 return True
         return False
 
@@ -44,12 +46,50 @@ class PlannerRRTStar(Planner):
         v_theta = np.arctan2(vect[1], vect[0])
         if extend_len > v_len:
             extend_len = v_len
-        new_node = (from_node[0]+extend_len*np.cos(v_theta), from_node[1]+extend_len*np.sin(v_theta))
-        if new_node[1]<0 or new_node[1]>=self.map.shape[0] or new_node[0]<0 or new_node[0]>=self.map.shape[1] or self._check_collision(from_node, new_node):
+        new_node = (
+            from_node[0] + extend_len * np.cos(v_theta),
+            from_node[1] + extend_len * np.sin(v_theta),
+        )
+        if (
+            new_node[1] < 0
+            or new_node[1] >= self.map.shape[0]
+            or new_node[0] < 0
+            or new_node[0] >= self.map.shape[1]
+            or self._check_collision(from_node, new_node)
+        ):
             return False, None
-        else:        
+        else:
             return new_node, utils.distance(new_node, from_node)
-    
+
+    def _near_nodes(self, new_node, radius):
+        nodes = []
+        for n in self.ntree:
+            if utils.distance(n, new_node) < radius:
+                nodes.append(n)
+        return nodes
+
+    def _best_parent(self, new_node, near_nodes):
+        min_cost = 99999
+        min_node = None
+        for n in near_nodes:
+            if self._check_collision(n, new_node):
+                continue
+            new_cost = self.cost[n] + utils.distance(n, new_node)
+            if new_cost < min_cost:
+                min_cost = new_cost
+                min_node = n
+        return min_node
+
+    def _rewire(self, new_node, near_nodes):
+        for n in near_nodes:
+            if n == new_node:
+                continue
+            if self._check_collision(n, new_node):
+                continue
+            new_cost = self.cost[new_node] + utils.distance(n, new_node)
+            if self.cost[n] > new_cost:
+                self.ntree[n] = new_node
+                self.cost[n] = new_cost
 
     def planning(self, start, goal, extend_len=None, img=None):
         if extend_len is None:
@@ -60,19 +100,23 @@ class PlannerRRTStar(Planner):
         self.cost[start] = 0
         goal_node = None
         for it in range(20000):
-            #print("\r", it, len(self.ntree), end="")
             samp_node = self._random_node(goal, self.map.shape)
             near_node = self._nearest_node(samp_node)
             new_node, cost = self._steer(near_node, samp_node, extend_len)
-            if new_node is not False:
-                self.ntree[new_node] = near_node
-                self.cost[new_node] = cost + self.cost[near_node]
-            else:
+            if new_node is False:
                 continue
+
+            near_nodes = self._near_nodes(new_node, 100)
+            best_parent = self._best_parent(new_node, near_nodes)
+
+            self.ntree[new_node] = best_parent
+            self.cost[new_node] = cost + self.cost[near_node]
+            self._rewire(new_node, near_nodes)
+
             if utils.distance(near_node, goal) < extend_len:
                 goal_node = near_node
                 break
-                
+
             # TODO: Re-Parent & Re-Wire
 
             # Draw
@@ -81,25 +125,31 @@ class PlannerRRTStar(Planner):
                     if self.ntree[n] is None:
                         continue
                     node = self.ntree[n]
-                    cv2.line(img, (int(n[0]), int(n[1])), (int(node[0]), int(node[1])), (0,1,0), 1)
+                    cv2.line(
+                        img,
+                        (int(n[0]), int(n[1])),
+                        (int(node[0]), int(node[1])),
+                        (0, 1, 0),
+                        1,
+                    )
                 # Near Node
                 img_ = img.copy()
-                cv2.circle(img_,utils.pos_int(new_node),5,(0,0.5,1),3)
+                cv2.circle(img_, utils.pos_int(new_node), 5, (0, 0.5, 1), 3)
                 # Draw Image
-                img_ = cv2.flip(img_,0)
-                cv2.imshow("Path Planning",img_)
+                img_ = cv2.flip(img_, 0)
+                cv2.imshow("Path Planning", img_)
                 k = cv2.waitKey(1)
                 if k == 27:
                     break
-        
+
         # Extract Path
         path = []
         n = goal_node
-        while(True):
+        while True:
             if n is None:
                 break
-            path.insert(0,n)
+            path.insert(0, n)
             node = self.ntree[n]
-            n = self.ntree[n] 
+            n = self.ntree[n]
         path.append(goal)
         return path
