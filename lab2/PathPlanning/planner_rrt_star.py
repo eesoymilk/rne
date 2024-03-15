@@ -61,6 +61,36 @@ class PlannerRRTStar(Planner):
         else:
             return new_node, utils.distance(new_node, from_node)
 
+    def _near_nodes(self, new_node, radius):
+        nodes = []
+        for n in self.ntree:
+            if utils.distance(n, new_node) < radius:
+                nodes.append(n)
+        return nodes
+
+    def _best_parent(self, new_node, near_nodes):
+        min_cost = 99999
+        min_node = None
+        for n in near_nodes:
+            if self._check_collision(n, new_node):
+                continue
+            new_cost = self.cost[n] + utils.distance(n, new_node)
+            if new_cost < min_cost:
+                min_cost = new_cost
+                min_node = n
+        return min_node
+
+    def _rewire(self, new_node, near_nodes):
+        for n in near_nodes:
+            if n == new_node:
+                continue
+            if self._check_collision(n, new_node):
+                continue
+            new_cost = self.cost[new_node] + utils.distance(n, new_node)
+            if self.cost[n] > new_cost:
+                self.ntree[n] = new_node
+                self.cost[n] = new_cost
+
     def planning(self, start, goal, extend_len=None, img=None):
         if extend_len is None:
             extend_len = self.extend_len
@@ -74,16 +104,19 @@ class PlannerRRTStar(Planner):
             samp_node = self._random_node(goal, self.map.shape)
             near_node = self._nearest_node(samp_node)
             new_node, cost = self._steer(near_node, samp_node, extend_len)
-            if new_node is not False:
-                self.ntree[new_node] = near_node
-                self.cost[new_node] = cost + self.cost[near_node]
-            else:
+            if new_node is False:
                 continue
+
+            near_nodes = self._near_nodes(new_node, 100)
+            best_parent = self._best_parent(new_node, near_nodes)
+
+            self.ntree[new_node] = best_parent
+            self.cost[new_node] = cost + self.cost[near_node]
+            self._rewire(new_node, near_nodes)
+
             if utils.distance(near_node, goal) < extend_len:
                 goal_node = near_node
                 break
-
-            # TODO: Re-Parent & Re-Wire
 
             # Draw
             if img is not None:
