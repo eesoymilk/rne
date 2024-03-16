@@ -10,34 +10,6 @@ from PathPlanning.cubic_spline import cubic_spline_2d, pos_int
 
 
 class Navigator:
-    simulator_map_params = {
-        "basic": {
-            "l": 9,
-            "wu": 7,
-            "wv": 3,
-            "car_w": 16,
-            "car_f": 13,
-            "car_r": 7,
-        },
-        "diff_drive": {
-            "l": 9,
-            "wu": 7,
-            "wv": 3,
-            "car_w": 16,
-            "car_f": 13,
-            "car_r": 7,
-        },
-        "bicycle": {
-            "l": 20,
-            "d": 5,
-            "wu": 5,
-            "wv": 2,
-            "car_w": 14,
-            "car_f": 25,
-            "car_r": 5,
-        },
-    }
-
     def __init__(self, args: argparse.Namespace, m: MatLike):
         self.simulator_name: str = args.simulator
         self.controller_name: str = args.controller
@@ -45,17 +17,26 @@ class Navigator:
         self._map = m
         self._map_cspace = 1 - cv2.dilate(1 - m, np.ones((40, 40)))
         self._set_controller_path = False
-        self._nav_pos: Optional[tuple[int, int]] = None
+        self._goal: Optional[tuple[int, int]] = None
         self._path: Optional[NDArray] = None
         self._pose: Optional[tuple[float, float, float]] = None
         self._way_points: Optional[NDArray] = None
 
+        simulator_params = {}
         controller_params = {}
         if self.simulator_name == "basic":
             from Simulation.simulator_basic import (
                 SimulatorBasic as Simulator,
             )
 
+            simulator_params = {
+                "l": 9,
+                "wu": 7,
+                "wv": 3,
+                "car_w": 16,
+                "car_f": 13,
+                "car_r": 7,
+            }
             if self.controller_name == "pid":
                 from PathTracking.controller_pid_basic import (
                     ControllerPIDBasic as Controller,
@@ -77,6 +58,14 @@ class Navigator:
                 SimulatorDifferentialDrive as Simulator,
             )
 
+            simulator_params = {
+                "l": 9,
+                "wu": 7,
+                "wv": 3,
+                "car_w": 16,
+                "car_f": 13,
+                "car_r": 7,
+            }
             if self.controller_name == "pid":
                 from PathTracking.controller_pid_basic import (
                     ControllerPIDBasic as Controller,
@@ -93,12 +82,20 @@ class Navigator:
                 )
             else:
                 raise NameError("Unknown controller!!")
-
         elif self.simulator_name == "bicycle":
             from Simulation.simulator_bicycle import (
                 SimulatorBicycle as Simulator,
             )
 
+            simulator_params = {
+                "l": 20,
+                "d": 5,
+                "wu": 5,
+                "wv": 2,
+                "car_w": 14,
+                "car_f": 25,
+                "car_r": 5,
+            }
             if self.controller_name == "pid":
                 from PathTracking.controller_pid_bicycle import (
                     ControllerPIDBicycle as Controller,
@@ -133,11 +130,7 @@ class Navigator:
         else:
             raise NameError("Unknown planner!!")
 
-        self.simulator = SimulatorMap(
-            Simulator,
-            m=m,
-            **self.simulator_map_params[args.simulator],
-        )
+        self.simulator = SimulatorMap(Simulator, m=m, **simulator_params)
         self.controller = Controller(**controller_params)
         self.planner = Planner(self._map_cspace)
 
@@ -145,21 +138,7 @@ class Navigator:
         def mouse_click(event, x, y, flags, param):
             if event != cv2.EVENT_LBUTTONUP:
                 return
-
-            nav_pos_new = (x, self._map.shape[0] - y)
-            if self._map_cspace[nav_pos_new[1], nav_pos_new[0]] <= 0.5:
-                return
-
-            self._way_points = self.planner.planning(
-                (pose[0], pose[1]), nav_pos_new, 20
-            )
-            if len(self._way_points) == 0:
-                return
-
-            self._nav_pos = nav_pos_new
-            self._path = np.array(cubic_spline_2d(self._way_points, interval=1))
-
-            self._set_controller_path = True
+            self._set_path((x, self._map.shape[0] - y))
 
         # Initialize
         window_name = "Known Map Navigation Demo"
@@ -167,18 +146,18 @@ class Navigator:
         cv2.setMouseCallback(window_name, mouse_click)
         self.simulator.init_pose(start_pose)
         command = ControlState(self.simulator_name, None, None)
-        pose = start_pose
+        self._pose = start_pose
         collision_count = 0
         # Main Loop
         while True:
             # Update State
             self.simulator.step(command)
-            pose = (
+            self._pose = (
                 self.simulator.state.x,
                 self.simulator.state.y,
                 self.simulator.state.yaw,
             )
-            # print("\r", self.simulator, "| Goal:", self._nav_pos, end="\t")
+            # print("\r", self.simulator, "| Goal:", self._goal, end="\t")
 
             if self._set_controller_path:
                 self.controller.set_path(self._path)
@@ -192,10 +171,9 @@ class Navigator:
                 # TODO: Planning and Controlling
                 if self.simulator_name == "basic":
                     if end_dist > 10:
-                        next_v = 2
+                        next_v = 5
                     else:
                         next_v = 0
-                    # Lateral
                     info = {
                         "x": self.simulator.state.x,
                         "y": self.simulator.state.y,
@@ -206,12 +184,10 @@ class Navigator:
                     next_w, target = self.controller.feedback(info)
                     command = ControlState("basic", next_v, next_w)
                 elif self.simulator_name == "diff_drive":
-                    # Longitude
                     if end_dist > 10:
                         next_v = 5
                     else:
                         next_v = 0
-                    # Lateral
                     info = {
                         "x": self.simulator.state.x,
                         "y": self.simulator.state.y,
@@ -230,13 +206,11 @@ class Navigator:
                     )
                     command = ControlState("diff_drive", next_lw, next_rw)
                 elif self.simulator_name == "bicycle":
-                    # Longitude (P Control)
-                    if end_dist > 40:
+                    if end_dist > 10:
                         target_v = 5
                     else:
                         target_v = 0
                     next_a = (target_v - self.simulator.state.v) * 0.5
-                    # Lateral
                     info = {
                         "x": self.simulator.state.x,
                         "y": self.simulator.state.y,
@@ -257,13 +231,40 @@ class Navigator:
             # Collision Handling
             if info["collision"]:
                 collision_count = 1
+                contact_position = (
+                    self.simulator.state.x,
+                    self.simulator.state.y,
+                )
             if collision_count > 0:
-                # TODO: Collision Handling
-                pass
+                if self.simulator_name in ("basic", "diff_drive"):
+                    # Backward for a short distance
+                    backup_command = ControlState(self.simulator_name, -5, 0)
+                elif self.simulator_name == "bicycle":
+                    # Backward for a short distance
+                    backup_command = ControlState(self.simulator_name, -1, 0)
+                else:
+                    raise NameError("Unknown simulator!!")
+
+                self.simulator.step(backup_command)
+                self._pose = (
+                    self.simulator.state.x,
+                    self.simulator.state.y,
+                    self.simulator.state.yaw,
+                )
+
+                if (
+                    np.hypot(
+                        self._pose[0] - contact_position[0],
+                        self._pose[1] - contact_position[1],
+                    )
+                    > 20
+                ):
+                    self._set_path(self._goal)
+                    collision_count = 0
 
             # Render Path
             img = self.simulator.render()
-            if self._nav_pos is not None and self._way_points is not None:
+            if self._goal is not None and self._way_points is not None:
                 img = self._render_path(img)
 
             img = cv2.flip(img, 0)
@@ -276,7 +277,7 @@ class Navigator:
                 break
 
     def _render_path(self, img: MatLike):
-        cv2.circle(img, self._nav_pos, 5, (0.5, 0.5, 1.0), 3)
+        cv2.circle(img, self._goal, 5, (0.5, 0.5, 1.0), 3)
         for i in range(len(self._way_points)):  # Draw Way Points
             cv2.circle(img, pos_int(self._way_points[i]), 3, (1.0, 0.4, 0.4), 1)
         for i in range(len(self._path) - 1):  # Draw Interpolating Curve
@@ -288,6 +289,20 @@ class Navigator:
                 1,
             )
         return img
+
+    def _set_path(self, new_goal: tuple[int, int]):
+        if self._map_cspace[new_goal[1], new_goal[0]] <= 0.5:
+            return
+
+        self._way_points = self.planner.planning(
+            (self._pose[0], self._pose[1]), new_goal, 20
+        )
+        if len(self._way_points) == 0:
+            return
+
+        self._goal = new_goal
+        self._path = np.array(cubic_spline_2d(self._way_points, interval=1))
+        self._set_controller_path = True
 
 
 def main(args: argparse.Namespace):
