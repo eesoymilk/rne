@@ -29,8 +29,7 @@ class FixedNormal(torch.distributions.Normal):
 class DiagGaussian(nn.Module):
     """Diagonal Gaussian distribution"""
 
-    # Constructor
-    def __init__(self, inp_dim, out_dim, std=0.5):
+    def __init__(self, inp_dim: int, out_dim: int, std: float = 0.5):
         super(DiagGaussian, self).__init__()
 
         init_ = lambda m: init(
@@ -46,10 +45,13 @@ class DiagGaussian(nn.Module):
 
 
 class PolicyNet(nn.Module):
-    """Policy network"""
-
-    # Constructor
-    def __init__(self, s_dim, a_dim, std=0.5):
+    def __init__(
+        self,
+        s_dim: int,
+        a_dim: int,
+        std: float = 0.5,
+        n_hidden: int = 512,
+    ):
         super(PolicyNet, self).__init__()
 
         init_ = lambda m: init(
@@ -59,15 +61,18 @@ class PolicyNet(nn.Module):
             nn.init.calculate_gain('relu'),
         )
         # TODO 1: policy network architecture
-        '''
-		self.main = ...
-		self.dist = ...
-		'''
+        self.main = nn.Sequential(
+            nn.Linear(s_dim, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_hidden * 2),
+            nn.ReLU(),
+            nn.Linear(n_hidden * 2, n_hidden),
+        )
+        self.dist = DiagGaussian(n_hidden, a_dim, std)
 
-    # Forward
-    def forward(self, state, deterministic=False):
-        feature = self.main(state)
-        dist = self.dist(feature)
+    def forward(self, state: torch.Tensor, deterministic: bool = False):
+        feature: torch.Tensor = self.main(state)
+        dist: torch.Tensor = self.dist(feature)
 
         if deterministic:
             action = dist.mode()
@@ -76,7 +81,6 @@ class PolicyNet(nn.Module):
 
         return action, dist.log_probs(action)
 
-    # Output action
     def action_step(self, state, deterministic=True):
         feature = self.main(state)
         dist = self.dist(feature)
@@ -90,16 +94,13 @@ class PolicyNet(nn.Module):
 
     # Evaluate log-probs & entropy
     def evaluate(self, state, action):
-        feature = self.main(state)
-        dist = self.dist(feature)
+        feature: torch.Tensor = self.main(state)
+        dist: torch.Tensor = self.dist(feature)
         return dist.log_probs(action), dist.entropy()
 
 
 class ValueNet(nn.Module):
-    """Value network"""
-
-    # Constructor
-    def __init__(self, s_dim):
+    def __init__(self, s_dim: int, n_hidden: int = 512):
         super(ValueNet, self).__init__()
 
         init_ = lambda m: init(
@@ -109,9 +110,15 @@ class ValueNet(nn.Module):
             nn.init.calculate_gain('relu'),
         )
         # TODO 2: value network architecture
-        '''
-		self.main = ...
-		'''
+        self.main = nn.Sequential(
+            nn.Linear(s_dim, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, n_hidden * 2),
+            nn.ReLU(),
+            nn.Linear(n_hidden * 2, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, 1),
+        )
 
     # Forward
     def forward(self, state):

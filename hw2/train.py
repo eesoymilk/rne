@@ -1,11 +1,13 @@
-from multi_env import MultiEnv, make_env
-from env_runner import EnvRunner
-from model import PolicyNet, ValueNet
-from agent import PPO
 import torch
 import os
 import time
 import numpy as np
+from tqdm import tqdm
+
+from multi_env import MultiEnv, make_env
+from env_runner import EnvRunner
+from model import PolicyNet, ValueNet
+from agent import PPO
 
 
 def main():
@@ -20,9 +22,9 @@ def main():
     lamb = 0.95
     gamma = 0.99
     clip_val = 0.2
-    lr = 1e-4
+    lr = 2.5e-4
     n_iter = 30000
-    device = 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Parameters that are fixed
     # ----------------------------
@@ -38,7 +40,7 @@ def main():
     # Create multiple environments
     # ----------------------------
     env = MultiEnv(
-        [make_env(i, rand_seed=int(time.time())) for i in range(n_env)]
+        [make_env(i, rand_seed=int(time.perf_counter())) for i in range(n_env)]
     )
     runner = EnvRunner(env, s_dim, a_dim, n_step, gamma, lamb, device=device)
 
@@ -75,7 +77,7 @@ def main():
 
     # Start training
     # ----------------------------
-    t_start = time.time()
+    t_start = time.perf_counter()
     policy_net.train()
     value_net.train()
 
@@ -96,19 +98,19 @@ def main():
         # Print the result
         if it % disp_step == 0:
             agent.lr_decay(it, n_iter)
-            n_sec = time.time() - t_start
+            n_sec = time.perf_counter() - t_start
             fps = int((it - start_it) * n_env * n_step / n_sec)
             mean_return, std_return, mean_len = runner.get_performance()
 
-            print("[{:5d} / {:5d}]".format(it, n_iter))
+            print(f"[{it:5d} / {n_iter:5d}]")
             print("----------------------------------")
-            print("Timesteps    = {:d}".format((it - start_it) * mb_size))
-            print("Elapsed time = {:.2f} sec".format(n_sec))
-            print("FPS          = {:d}".format(fps))
-            print("actor loss   = {:.6f}".format(pg_loss))
-            print("critic loss  = {:.6f}".format(v_loss))
-            print("mean return  = {:.6f}".format(mean_return))
-            print("mean length  = {:.2f}".format(mean_len))
+            print(f"Timesteps    = {((it - start_it) * mb_size):d}")
+            print(f"Elapsed time = {n_sec:.2f} sec")
+            print(f"FPS          = {fps:d}")
+            print(f"actor loss   = {pg_loss:.6f}")
+            print(f"critic loss  = {v_loss:.6f}")
+            print(f"mean return  = {mean_return:.6f}")
+            print(f"mean length  = {mean_len:.2f}")
             print()
 
         # Save model

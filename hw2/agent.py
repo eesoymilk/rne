@@ -1,23 +1,26 @@
+from typing import Literal
 import torch
 import torch.nn as nn
 import numpy as np
+import numpy.typing as npt
+
+from model import PolicyNet, ValueNet
 
 
 class PPO:
-    """PPO Agent Class"""
-
-    # Constructor
     def __init__(
         self,
-        policy_net,
-        value_net,
-        lr=1e-4,
-        max_grad_norm=0.5,
-        clip_val=0.2,
-        sample_n_epoch=4,
-        sample_mb_size=64,
-        mb_size=1024,
-        device='cpu',
+        policy_net: PolicyNet,
+        value_net: ValueNet,
+        lr: float = 1e-4,
+        max_grad_norm: float = 0.5,
+        clip_val: float = 0.2,
+        sample_n_epoch: int = 4,
+        sample_mb_size: int = 64,
+        mb_size: int = 1024,
+        device: Literal["cuda", "cpu"] = (
+            "cuda" if torch.cuda.is_available() else "cpu"
+        ),
     ):
         self.policy_net = policy_net
         self.value_net = value_net
@@ -32,15 +35,14 @@ class PPO:
         self.sample_n_mb = mb_size // sample_mb_size
         self.rand_idx = np.arange(mb_size)
 
-    # Train PPO
     def train(
         self,
-        mb_states,
-        mb_actions,
-        mb_old_values,
-        mb_advs,
-        mb_returns,
-        mb_old_a_logps,
+        mb_states: npt.NDArray,
+        mb_actions: npt.NDArray,
+        mb_old_values: npt.NDArray,
+        mb_advs: npt.NDArray,
+        mb_returns: npt.NDArray,
+        mb_old_a_logps: npt.NDArray,
     ):
         mb_states = torch.from_numpy(mb_states).to(self.device)
         mb_actions = torch.from_numpy(mb_actions).to(self.device)
@@ -79,10 +81,12 @@ class PPO:
                 v_loss = torch.max(v_loss1, v_loss2).mean()
 
                 # TODO 4: Policy gradient loss for PPO
-
-                '''
-				pg_loss  = ...
-				'''
+                ratio = (sample_a_logps - sample_old_a_logps).exp()
+                pg_loss1 = -sample_advs * ratio
+                pg_loss2 = -sample_advs * torch.clamp(
+                    ratio, 1.0 - self.clip_val, 1.0 + self.clip_val
+                )
+                pg_loss = torch.mean(torch.max(pg_loss1, pg_loss2))
 
                 # Train actor
                 self.opt_actor.zero_grad()
@@ -102,14 +106,14 @@ class PPO:
 
         return pg_loss.item(), v_loss.item()
 
-    # Linear learning rate decay
-    def linear_lr_decay(self, opt, it, n_it, initial_lr):
+    def _linear_lr_decay(
+        self, opt: torch.optim.Adam, it: int, n_it: int, initial_lr: float
+    ):
         lr = initial_lr - (initial_lr * (it / float(n_it)))
 
         for param_group in opt.param_groups:
             param_group['lr'] = lr
 
-    # Learning rate decay
-    def lr_decay(self, it, n_it):
-        self.linear_lr_decay(self.opt_actor, it, n_it, self.lr)
-        self.linear_lr_decay(self.opt_critic, it, n_it, self.lr)
+    def lr_decay(self, it: int, n_it: int):
+        self._linear_lr_decay(self.opt_actor, it, n_it, self.lr)
+        self._linear_lr_decay(self.opt_critic, it, n_it, self.lr)
