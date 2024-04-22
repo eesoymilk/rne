@@ -1,9 +1,12 @@
-from model import PolicyNet
+import os
+
 import cv2
 import torch
 import numpy as np
-import os
+from tqdm import tqdm
+
 import wrapper
+from model import PolicyNet
 
 
 def main():
@@ -35,7 +38,7 @@ def main():
     policy_net.eval()
     mean_total_reward = 0
 
-    for it in range(n_iter):
+    for it in tqdm(range(n_iter), desc="Evaluating"):
         ob, _ = env.reset()
         total_reward = 0
         length = 0
@@ -58,10 +61,10 @@ def main():
                 mean_total_reward += total_reward
                 break
 
-        print(f"{total_reward = :.6f}, {length = :d}", flush=True)
+        # print(f"{total_reward = :.6f}, {length = :d}", flush=True)
 
     mean_total_reward /= n_iter
-    print("Evaluation Score: {:.4f}".format(mean_total_reward))
+    print(f"Evaluation Score: {mean_total_reward:.4f}")
 
 
 if __name__ == '__main__':

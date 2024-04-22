@@ -53,14 +53,6 @@ class PolicyNet(nn.Module):
         n_hidden: int = 512,
     ):
         super(PolicyNet, self).__init__()
-
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0),
-            nn.init.calculate_gain('relu'),
-        )
-        # TODO 1: policy network architecture
         self.main = nn.Sequential(
             nn.Linear(s_dim, n_hidden),
             nn.ReLU(),
@@ -102,14 +94,6 @@ class PolicyNet(nn.Module):
 class ValueNet(nn.Module):
     def __init__(self, s_dim: int, n_hidden: int = 512):
         super(ValueNet, self).__init__()
-
-        init_ = lambda m: init(
-            m,
-            nn.init.orthogonal_,
-            lambda x: nn.init.constant_(x, 0),
-            nn.init.calculate_gain('relu'),
-        )
-        # TODO 2: value network architecture
         self.main = nn.Sequential(
             nn.Linear(s_dim, n_hidden),
             nn.ReLU(),

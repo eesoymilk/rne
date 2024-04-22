@@ -101,36 +101,31 @@ class EnvRunner:
         self.reward_buf = deque(maxlen=100)
         self.len_buf = deque(maxlen=100)
 
-    # Run n steps to get a batch
+    def _run_step(self, step: int, policy_net: PolicyNet, value_net: ValueNet):
+        """Run a single step"""
+        state_tensor = torch.tensor(
+            self.states, dtype=torch.float32, device=self.device
+        )
+        action, a_logp = policy_net(state_tensor)
+        value = value_net(state_tensor)
+
+        actions = action.cpu().numpy()
+        a_logps = a_logp.cpu().numpy()
+        values = value.cpu().numpy()
+
+        self.mb_states[step, :] = self.states
+        self.mb_dones[step, :] = self.dones
+        self.mb_actions[step, :] = actions
+        self.mb_a_logps[step, :] = a_logps
+        self.mb_values[step, :] = values
+        self.states, rewards, self.dones, _ = self.env.step(actions)
+        self.mb_rewards[step, :] = rewards
+
     def run(self, policy_net: PolicyNet, value_net: ValueNet):
+        """Run n steps to get a batch"""
         # 1. Run n steps
-        # -------------------------------------
         for step in range(self.n_step):
-            # self.states : (n_env, s_dim)
-            # actions     : (n_env, a_dim)
-            # self.dones  : (n_env)
-            # a_logps     : (n_env)
-            # values      : (n_env)
-            # rewards     : (n_env)
-            # TODO 3: Run a step to collect data
-
-            state_tensor = torch.tensor(
-                self.states, dtype=torch.float32, device=self.device
-            )
-            action, a_logp = policy_net(state_tensor)
-            value = value_net(state_tensor)
-
-            actions = action.cpu().numpy()
-            a_logps = a_logp.cpu().numpy()
-            values = value.cpu().numpy()
-
-            self.mb_states[step, :] = self.states
-            self.mb_dones[step, :] = self.dones
-            self.mb_actions[step, :] = actions
-            self.mb_a_logps[step, :] = a_logps
-            self.mb_values[step, :] = values
-            self.states, rewards, self.dones, info = self.env.step(actions)
-            self.mb_rewards[step, :] = rewards
+            self._run_step(step, policy_net, value_net)
 
         last_values = (
             value_net(torch.from_numpy(self.states).float().to(self.device))
@@ -140,7 +135,6 @@ class EnvRunner:
         self.record()
 
         # 2. Compute returns
-        # -------------------------------------
         mb_returns = compute_gae(
             self.mb_rewards,
             self.mb_values,
@@ -151,11 +145,6 @@ class EnvRunner:
             self.lamb,
         )
 
-        # mb_states : (n_step*n_env, s_dim)
-        # mb_actions: (n_step*n_env) or (n_env*n_step, a_dim)
-        # mb_a_logps: (n_step*n_env)
-        # mb_values : (n_step*n_env)
-        # mb_returns: (n_step*n_env)
         return (
             self.mb_states.reshape(self.n_step * self.n_env, self.s_dim),
             self.mb_actions.reshape(self.n_step * self.n_env, self.a_dim),

@@ -1,19 +1,23 @@
 import os
+from pathlib import Path
+
 import numpy as np
 from matplotlib import pyplot as plt
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 def main():
-    save_dir = './save'
+    save_dir = SCRIPT_DIR / 'save'
     its = []
     mean_returns = []
     std_returns = []
 
-    with open(os.path.join(save_dir, 'return.txt')) as file:
+    with open(save_dir / "return.txt") as file:
         lines = file.read().split()
 
     for line in lines:
-        strs = line.split(',')
+        strs = line.split(",")
         if len(strs) < 3:
             continue
 
@@ -27,19 +31,20 @@ def main():
 
     plt.xlim(0, its[-1])
     plt.ylim(0, 250)
-    plt.ylabel('Total reward')
-    plt.xlabel('Iteration')
+    plt.ylabel("Total reward")
+    plt.xlabel("Iteration")
     plt.grid()
-    plt.plot(its, mean_returns, color='red')
+    plt.plot(its, mean_returns, color="red")
     plt.fill_between(
         its,
         mean_returns + std_returns,
         mean_returns - std_returns,
-        color='red',
+        color="red",
         alpha=0.4,
     )
+    plt.savefig(save_dir / "return.png")
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
